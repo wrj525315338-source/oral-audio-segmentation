@@ -2,7 +2,7 @@
 Step 2: Silero VAD 语音活动检测
 对标准化后的 WAV 文件进行 VAD 检测，返回每个文件的语音片段列表。
 
-注意：torch/torchaudio 仅在函数内部导入（lazy import），
+注意：torch/soundfile 仅在函数内部导入（lazy import），
 避免在未安装 torch 的环境中 import 本模块就报错。
 """
 from __future__ import annotations
@@ -23,6 +23,7 @@ def _load_model():
         model="silero_vad",
         force_reload=False,
         onnx=False,
+        trust_repo=True,
     )
     return model, utils
 
@@ -47,7 +48,8 @@ def detect_speech(
         包含文件路径、总时长、语音片段列表。
     """
     import torch
-    import torchaudio
+    import soundfile as sf
+    import numpy as np
 
     if cfg is None:
         cfg = load_config()
@@ -59,19 +61,22 @@ def detect_speech(
     speech_pad_ms = vad_cfg["speech_pad_ms"]
     window_size = vad_cfg["window_size_samples"]
 
-    # 加载音频
-    waveform, sr = torchaudio.load(str(audio_path))
+    # 用 soundfile 读取音频（避免 torchaudio 依赖 torchcodec）
+    data, sr = sf.read(str(audio_path), dtype="float32")
+
+    # soundfile 返回 shape: (samples,) mono 或 (samples, channels) multi-channel
+    if data.ndim == 2:
+        # 多声道取均值转 mono
+        data = data.mean(axis=1)
+
+    # Silero VAD 要求 16kHz，标准化步骤应已处理
     if sr != 16000:
-        # 重采样到 16kHz（Silero VAD 要求）
-        resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000)
-        waveform = resampler(waveform)
-        sr = 16000
+        raise ValueError(
+            f"{audio_path.name}: 采样率 {sr}Hz != 16000Hz。"
+            "标准化音频必须是 16kHz，请先运行 normalize_audio.py 或检查 FFmpeg 标准化步骤。"
+        )
 
-    # 如果是多声道，取均值
-    if waveform.shape[0] > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
-
-    waveform = waveform.squeeze(0)  # -> (samples,)
+    waveform = torch.from_numpy(data)  # -> (samples,)
     duration_sec = len(waveform) / sr
 
     # 加载模型

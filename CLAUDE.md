@@ -9,7 +9,8 @@
 - Python 3.9+
 - FFmpeg（音频格式转换和切分）
 - Silero VAD（语音活动检测）
-- PyTorch / torchaudio
+- PyTorch
+- soundfile
 - PyYAML
 
 ## 架构
