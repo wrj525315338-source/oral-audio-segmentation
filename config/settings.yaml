@@ -1,0 +1,46 @@
+# ============================================================
+# 口语回答音频批量切分 - 全局配置
+# ============================================================
+
+# --- 路径配置 ---
+paths:
+  raw_dir: "data/raw"                # 原始音频目录
+  normalized_dir: "data/normalized"  # 标准化后的 WAV 目录
+  segments_dir: "data/segments"      # 切分后的回答片段目录
+  reports_dir: "data/reports"        # 质检报告目录
+  schedule_csv: "config/schedule.csv"  # 实验时间表
+
+# --- FFmpeg / 音频标准化 ---
+audio:
+  sample_rate: 16000   # Hz
+  channels: 1          # mono
+  codec: "pcm_s16le"   # 16-bit PCM
+  format: "wav"
+
+# --- Silero VAD 参数 ---
+vad:
+  threshold: 0.5           # 语音概率阈值 (0~1)
+  min_speech_duration_ms: 250   # 最短语音段 (ms)，低于此值丢弃
+  min_silence_duration_ms: 100  # 最短静音段 (ms)，用于分割语音
+  speech_pad_ms: 30        # 语音段前后填充 (ms)
+  window_size_samples: 512 # 每次送入 VAD 的采样点数 (512/1024/1536)
+
+# --- Offset 估算 ---
+offset:
+  # 候选 offset 的搜索范围 (秒)：以 schedule.csv 的 answer_start 为基准
+  # offset = detected_speech_start - answer_start
+  # 如果学生提前开始或延后，搜索范围需覆盖该区间
+  search_range_min: -60.0  # 最早可能的 offset (秒)
+  search_range_max: 60.0   # 最晚可能的 offset (秒)
+  step: 0.5                # 搜索步长 (秒)
+  # 最低置信度阈值：overlap 总时长 / 总标准窗口时长
+  min_confidence: 0.05
+  # 至少检测到多少个窗口有语音，才认为 offset 有效
+  min_windows_with_speech: 2
+
+# --- 切分缓冲 ---
+split:
+  pre_buffer: 0.5   # 切分起点前额外保留的秒数
+  post_buffer: 0.5  # 切分终点后额外保留的秒数
+  # 如果 offset 估算失败，是否跳过该被试 (True) 还是用 offset=0 切分 (False)
+  skip_on_offset_failure: true
