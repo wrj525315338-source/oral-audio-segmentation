@@ -1,6 +1,4 @@
-# 口语回答音频批量切分 - 依赖
 # Python >= 3.9
-
 torch>=2.0.0
 torchaudio>=2.0.0
 pyyaml>=6.0
