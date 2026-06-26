@@ -1,6 +1,7 @@
 """
 一键运行 Pipeline
 按顺序执行：标准化 -> VAD 检测 -> Offset 估算 -> 切分 -> 生成报告。
+如果 beep.enabled=true，额外执行 beep 检测 -> 对齐 -> 切分 -> RT 计算。
 
 使用方法：
     python -m src.pipeline
@@ -18,6 +19,44 @@ from .split_audio import split_all
 from .qc_report import generate_report
 
 logger = setup_logging()
+
+
+def _run_beep_workflow(vad_results: dict, cfg: dict) -> None:
+    """运行 beep-based 工作流。"""
+    from .beep_detect import detect_all_beeps
+    from .beep_align import align_all_beeps
+    from .beep_split import split_by_beep
+    from .beep_reaction_time import calculate_all_reaction_times
+
+    logger.info("")
+    logger.info("-" * 60)
+    logger.info("Beep-based 分割模式")
+    logger.info("-" * 60)
+
+    # Step B1: Beep 检测
+    logger.info("")
+    logger.info("[Beep Step 1] Beep 检测...")
+    candidates = detect_all_beeps(cfg)
+
+    # Step B2: Beep 对齐
+    logger.info("")
+    logger.info("[Beep Step 2] Beep 对齐...")
+    alignments, manual_required = align_all_beeps(candidates, cfg)
+
+    # Step B3: Beep-based 切分
+    logger.info("")
+    logger.info("[Beep Step 3] Beep-based 切分...")
+    split_results = split_by_beep(alignments, vad_results, cfg)
+
+    # Step B4: Reaction Time 计算
+    logger.info("")
+    logger.info("[Beep Step 4] Reaction Time 计算...")
+    rt_results = calculate_all_reaction_times(alignments, vad_results, cfg)
+
+    logger.info("")
+    logger.info("Beep 工作流完成!")
+    if manual_required:
+        logger.warning("有 %d 个被试需要人工标注 beep，请查看 data/reports/manual_beep_required.csv", len(manual_required))
 
 
 def run_pipeline(config_path: str | None = None) -> None:
@@ -84,6 +123,12 @@ def run_pipeline(config_path: str | None = None) -> None:
     report_path = generate_report(split_results, cfg)
 
     # ------------------------------------------------------------------
+    # 6. Beep-based 工作流（可选）
+    # ------------------------------------------------------------------
+    if cfg.get("beep", {}).get("enabled", False):
+        _run_beep_workflow(vad_results, cfg)
+
+    # ------------------------------------------------------------------
     # 完成
     # ------------------------------------------------------------------
     elapsed = time.time() - start_time
@@ -91,6 +136,9 @@ def run_pipeline(config_path: str | None = None) -> None:
     logger.info("=" * 60)
     logger.info("Pipeline 完成! 耗时 %.1f 秒", elapsed)
     logger.info("报告路径: %s", report_path)
+    if cfg.get("beep", {}).get("enabled", False):
+        logger.info("Beep 切分目录: data/segments_beep/")
+        logger.info("Beep 报告: data/reports/beep_*.csv")
     logger.info("=" * 60)
 
 

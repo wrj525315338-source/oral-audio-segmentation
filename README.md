@@ -172,3 +172,125 @@ A: 检查原始音频质量，确认 schedule.csv 时间表正确。可以在 `c
 
 **Q: 如何只重新切分（跳过标准化和 VAD）**
 A: `data/normalized/` 中已有的文件会自动跳过。VAD 结果目前不缓存，如需优化可自行扩展。
+
+---
+
+## Beep-based 分割模式（Reaction Time 分析）
+
+### 概述
+
+Beep-based 模式使用实验视频中的 beep 提示音作为回答窗口的外部时间锚点，比 VAD-offset 估算更精确，适合正式的 reaction time 分析。
+
+**工作原理：**
+1. 实验视频中每道题正式回答前有 beep 提示音
+2. 大多数学生录音中能听到 beep
+3. 使用模板匹配自动检测 beep 时间
+4. 以 beep 为锚点切分音频，计算 reaction time
+
+### 配置
+
+**config/beep_template.wav** — beep 模板音频（用户提供）
+
+**config/beep_schedule.csv** — beep 时间表：
+
+```csv
+question_id,beep_offset_from_q01,answer_duration_sec
+Q01,0.0,10.0
+Q02,24.0,10.0
+...
+```
+
+- `beep_offset_from_q01`: 每题 beep 相对于 Q01 beep 的时间差
+- `answer_duration_sec`: beep 后允许回答的时长
+
+**config/manual_beep_times.csv** — 人工标注（可选）：
+
+```csv
+participant_id,question_id,beep_time_sec,notes
+P001,Q01,30.245,
+P008,Q01,28.912,manual checked
+```
+
+**config/settings.yaml** — beep 配置：
+
+```yaml
+beep:
+  enabled: true                    # 启用 beep 模式
+  template_path: "config/beep_template.wav"
+  min_confidence: 0.4              # 最低置信度阈值
+  search_tolerance_sec: 1.0        # 搜索容差
+  pre_buffer_sec: 0.3              # 切分起点前缓冲
+  post_buffer_sec: 0.5             # 切分终点后缓冲
+  rt_reference: "beep_offset"      # RT 参考点
+  manual_override: true            # 人工标注覆盖自动检测
+```
+
+### 运行
+
+```bash
+python -m src.pipeline
+```
+
+Pipeline 会自动执行：
+1. 标准化 + VAD 检测（同上）
+2. **Beep 检测**：模板匹配检测每个被试的 beep
+3. **Beep 对齐**：将 beep 匹配到 Q01-Q10
+4. **Beep 切分**：以 beep 为锚点切分 → `data/segments_beep/`
+5. **RT 计算**：计算 reaction time → `data/reports/beep_reaction_time_report.csv`
+
+### 输出
+
+**切分后的音频：**
+```
+data/segments_beep/
+├── P001_Q01.wav
+├── P001_Q02.wav
+└── ...
+```
+
+**报告文件：**
+
+| 文件 | 说明 |
+|------|------|
+| `beep_candidates_report.csv` | 所有 beep 检测候选 |
+| `beep_alignment_report.csv` | beep 对齐结果 |
+| `manual_beep_required.csv` | 需要人工标注的被试 |
+| `beep_reaction_time_report.csv` | Reaction time 分析结果 |
+
+### Reaction Time 报告字段
+
+| 字段 | 说明 |
+|------|------|
+| participant_id | 被试编号 |
+| question_id | 题目编号 |
+| beep_time_sec | beep 时间（秒）|
+| beep_source | beep 来源（detected/manual/inferred）|
+| first_speech_start_sec | 首次语音起始时间 |
+| rt_from_beep_onset_sec | 从 beep 开始到首次语音的 RT |
+| rt_from_beep_offset_sec | 从 beep 结束到首次语音的 RT |
+| reaction_time_sec | 主 RT（根据 rt_reference 配置）|
+| rt_status | 状态（valid/no_speech_detected/onset_before_beep/rt_too_long）|
+| warning | 警告信息 |
+
+### 人工介入流程
+
+如果自动检测不到 beep，会生成 `data/reports/manual_beep_required.csv`：
+
+1. 用音频播放器打开对应的 `data/normalized/PXXX.wav`
+2. 找到 Q01 beep 的时间（秒）
+3. 填入 `config/manual_beep_times.csv`
+4. 重新运行 `python -m src.pipeline`
+
+人工标注会优先覆盖自动检测结果。
+
+### 两种模式对比
+
+| 特性 | VAD-offset 模式 | Beep-based 模式 |
+|------|-----------------|-----------------|
+| 时间锚点 | 学生语音（推断） | beep 提示音（外部） |
+| 精度 | 中等 | 高 |
+| 适用场景 | 快速切分 | 正式 RT 分析 |
+| 输出目录 | `data/segments/` | `data/segments_beep/` |
+| 人工介入 | 通常不需要 | 可能需要标注 beep |
+
+**建议：** 正式分析使用 beep-based 模式，VAD-offset 模式作为备选。

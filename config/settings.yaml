@@ -44,3 +44,18 @@ split:
   post_buffer: 0.5  # 切分终点后额外保留的秒数
   # 如果 offset 估算失败，是否跳过该被试 (True) 还是用 offset=0 切分 (False)
   skip_on_offset_failure: true
+
+# --- Beep-based 分割模式 ---
+beep:
+  enabled: true                              # 是否启用 beep 模式
+  template_path: "config/beep_template.wav"  # beep 模板音频路径
+  beep_schedule_csv: "config/beep_schedule.csv"  # beep 时间表
+  manual_beep_csv: "config/manual_beep_times.csv"  # 人工标注的 beep 时间
+  detection_method: "template"               # 检测方法: template
+  min_confidence: 0.4                        # 最低置信度阈值
+  search_tolerance_sec: 1.0                  # 搜索容差（秒）
+  pre_buffer_sec: 0.3                        # 切分起点前缓冲（秒）
+  post_buffer_sec: 0.5                       # 切分终点后缓冲（秒）
+  rt_reference: "beep_offset"                # RT 参考点: beep_offset 或 beep_onset
+  manual_override: true                      # 人工标注是否覆盖自动检测
+  generate_manual_required_csv: true         # 是否生成人工介入报告

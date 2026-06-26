@@ -59,3 +59,66 @@ class SplitResult:
     has_detected_speech_in_window: bool
     speech_duration_in_window: float
     warning: str
+
+
+# ============================================================
+# Beep-based 模式数据模型
+# ============================================================
+
+
+@dataclass
+class BeepScheduleEntry:
+    """beep_schedule.csv 中的一行。"""
+    question_id: str
+    beep_offset_from_q01: float
+    answer_duration_sec: float
+
+
+@dataclass
+class ManualBeepTime:
+    """manual_beep_times.csv 中的一行。"""
+    participant_id: str
+    question_id: str
+    beep_time_sec: float
+    notes: str = ""
+
+
+@dataclass
+class BeepAlignment:
+    """beep 对齐结果。"""
+    question_id: str
+    beep_time_sec: float
+    beep_source: str  # detected, manual, manual_anchor_inferred, inferred_from_detected_beeps, manual_required, missing
+    beep_confidence: float
+    answer_duration_sec: float
+    warning: str = ""
+
+
+@dataclass
+class BeepSplitResult:
+    """beep-based 切分结果。"""
+    participant_id: str
+    question_id: str
+    beep_time_sec: float
+    beep_source: str
+    cut_start_sec: float
+    cut_end_sec: float
+    output_file: str
+    has_speech_in_window: bool
+    speech_duration_in_window: float
+    warning: str
+
+
+@dataclass
+class ReactionTimeResult:
+    """Reaction time 计算结果。"""
+    participant_id: str
+    question_id: str
+    beep_time_sec: float
+    beep_source: str
+    first_speech_start_sec: float
+    rt_from_beep_onset_sec: float
+    rt_from_beep_offset_sec: float
+    reaction_time_sec: float
+    rt_status: str  # valid, no_speech_detected, onset_before_beep, rt_too_long, manual_required, missing_beep
+    warning: str = ""
